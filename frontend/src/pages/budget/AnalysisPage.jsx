@@ -1,94 +1,243 @@
-//$$$$$$
-import {
-  Chart as ChartJS,
-  ArcElement,
-  Tooltip,
-  Legend,
-  CategoryScale,
-  LinearScale,
-} from "chart.js";
-import { Pie } from "react-chartjs-2";
-import "./AnalysisPage.css";
+import { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, Brain, CheckCircle2, Loader2, Send, Sparkles } from "lucide-react";
+import { BarChart, Bar, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import api from "../../lib/api";
+import { useBudgetOutlet } from "./useBudgetOutlet";
 
-ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale);
-
-// Mock data similar to what the original index.html would generate
-const mockExpenseData = {
-  Shopping: 150,
-  "Food & Dining": 250,
-  Entertainment: 80,
-  Healthcare: 50,
-  Subscriptions: 30,
-  General: 120,
-};
-
-const labels = Object.keys(mockExpenseData);
-const dataValues = Object.values(mockExpenseData);
-const totalExpenses = dataValues.reduce((sum, val) => sum + val, 0);
-
-const chartData = {
-  labels: labels,
-  datasets: [
-    {
-      data: dataValues,
-      backgroundColor: [
-        "#ff453a",
-        "#32ade6",
-        "#ffcc00",
-        "#af52de",
-        "#30d158",
-        "#ff9f0a",
-        "#8e8e93",
-        "#5e5ce6",
-      ],
-      borderColor: "#0f172a",
-      borderWidth: 2,
-    },
-  ],
-};
-
-const chartOptions = {
-  plugins: {
-    legend: {
-      display: false, // We are creating a custom legend
-    },
-  },
-  cutout: "50%",
-};
+const starterPrompts = [
+  "How much can I safely spend this week?",
+  "How can I reduce food and subscription costs?",
+  "Help me hit my savings goal faster.",
+];
 
 const AnalysisPage = () => {
-  return (
-    <div id="analysis-page-container">
-      <div className="page-header">
-        <h2>Expense Analysis</h2>
-      </div>
+  const { currentMonth, money, notify } = useBudgetOutlet();
+  const [loading, setLoading] = useState(true);
+  const [brief, setBrief] = useState(null);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatMessages, setChatMessages] = useState([
+    {
+      role: "assistant",
+      content: "Hey! I am your student budget copilot. Ask me anything about spending, saving, or goals.",
+    },
+  ]);
 
-      {totalExpenses > 0 ? (
-        <>
-          <div id="chart-container">
-            <Pie data={chartData} options={chartOptions} />
-          </div>
-          <div id="legend-container">
-            {labels.map((label, index) => (
-              <div className="legend-item" key={label}>
-                <div
-                  className="legend-color-box"
-                  style={{ backgroundColor: chartData.datasets[0].backgroundColor[index] }}
-                ></div>
-                <span>
-                  {label} (
-                  {((mockExpenseData[label] / totalExpenses) * 100).toFixed(1)}
-                  %)
-                </span>
+  const monthParam = useMemo(() => {
+    const year = currentMonth.getFullYear();
+    const month = String(currentMonth.getMonth() + 1).padStart(2, "0");
+    return `${year}-${month}`;
+  }, [currentMonth]);
+
+  useEffect(() => {
+    const run = async () => {
+      try {
+        setLoading(true);
+        const { data } = await api.get("/api/transactions/ai-brief", {
+          params: { month: monthParam, mode: "actual" },
+        });
+        setBrief(data);
+      } catch (error) {
+        notify("error", error.response?.data?.message || "Could not load AI analysis.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    run();
+  }, [monthParam, notify]);
+
+  const sendMessage = async (messageText) => {
+    const message = String(messageText || "").trim();
+    if (!message || chatLoading) return;
+
+    const nextHistory = [...chatMessages, { role: "user", content: message }];
+    setChatMessages(nextHistory);
+    setChatInput("");
+
+    try {
+      setChatLoading(true);
+      const { data } = await api.post("/api/ai/chat", {
+        month: monthParam,
+        mode: "actual",
+        message,
+        history: nextHistory,
+      });
+      setChatMessages((prev) => [...prev, { role: "assistant", content: data.reply || "No response generated." }]);
+    } catch (error) {
+      setChatMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: error.response?.data?.message || "I could not answer that right now. Try again." },
+      ]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-6 text-slate-300 flex items-center gap-2">
+        <Loader2 size={18} className="animate-spin" /> Loading AI analysis...
+      </div>
+    );
+  }
+
+  if (!brief) {
+    return (
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-6 text-slate-300">
+        AI analysis is currently unavailable.
+      </div>
+    );
+  }
+
+  const scoreTiles = [
+    { label: "Overall", value: brief.scorecard?.overall || 0 },
+    { label: "Spending Discipline", value: brief.scorecard?.spendingDiscipline || 0 },
+    { label: "Savings Stability", value: brief.scorecard?.savingsStability || 0 },
+    { label: "Goal Momentum", value: brief.scorecard?.goalMomentum || 0 },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <section className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 sm:p-5">
+        <h2 className="font-semibold text-white flex items-center gap-2">
+          <Sparkles size={16} className="text-cyan-300" /> AI Budget Brief
+        </h2>
+        <p className="text-sm text-slate-400 mt-1">{brief.coach?.summary || "No summary generated."}</p>
+
+        <div className="mt-4 grid grid-cols-2 xl:grid-cols-4 gap-3">
+          {scoreTiles.map((tile) => (
+            <article key={tile.label} className="rounded-xl border border-slate-700 bg-slate-950/60 p-3">
+              <p className="text-xs text-slate-400 uppercase tracking-wider">{tile.label}</p>
+              <p className="text-2xl font-black text-white mt-1">{Number(tile.value).toFixed(0)}</p>
+              <div className="mt-2 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                <div className="h-full bg-cyan-400" style={{ width: `${Math.max(0, Math.min(100, tile.value))}%` }} />
               </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 sm:p-5">
+        <h3 className="font-semibold text-white">Top Spend Categories</h3>
+        <div className="h-64 mt-3">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={brief.topCategories || []}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+              <XAxis dataKey="category" stroke="#94a3b8" />
+              <YAxis stroke="#94a3b8" />
+              <Tooltip
+                formatter={(value) => money(value)}
+                contentStyle={{ backgroundColor: "#0f172a", border: "1px solid #334155", borderRadius: "10px" }}
+              />
+              <Bar dataKey="amount" fill="#22d3ee" radius={[8, 8, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </section>
+
+      <section className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <article className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 sm:p-5">
+          <h3 className="font-semibold text-white flex items-center gap-2">
+            <CheckCircle2 size={16} className="text-emerald-300" /> Wins
+          </h3>
+          <ul className="mt-3 space-y-2 text-sm text-slate-300 list-disc list-inside">
+            {(brief.coach?.wins || []).map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </article>
+
+        <article className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 sm:p-5">
+          <h3 className="font-semibold text-white flex items-center gap-2">
+            <AlertTriangle size={16} className="text-amber-300" /> Risks
+          </h3>
+          <ul className="mt-3 space-y-2 text-sm text-slate-300 list-disc list-inside">
+            {(brief.coach?.risks || []).map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </article>
+      </section>
+
+      <section className="grid grid-cols-1 xl:grid-cols-[1fr_1.1fr] gap-4">
+        <article className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 sm:p-5">
+          <h3 className="font-semibold text-white flex items-center gap-2">
+            <Brain size={16} className="text-violet-300" /> 7-Day AI Action Plan
+          </h3>
+          <ol className="mt-3 space-y-2 text-sm text-slate-200 list-decimal list-inside">
+            {(brief.coach?.actionPlan || []).map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
+          {brief.coach?.challenge && (
+            <p className="mt-4 rounded-xl border border-violet-400/30 bg-violet-500/10 p-3 text-sm text-violet-100">
+              Challenge: {brief.coach.challenge}
+            </p>
+          )}
+        </article>
+
+        <article className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 sm:p-5">
+          <h3 className="font-semibold text-white flex items-center gap-2">
+            <Sparkles size={16} className="text-cyan-300" /> AI Budget Chatbot
+          </h3>
+          <p className="text-xs text-slate-400 mt-1">Ask practical student budgeting questions with your live month context.</p>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            {starterPrompts.map((prompt) => (
+              <button
+                key={prompt}
+                onClick={() => sendMessage(prompt)}
+                className="text-xs rounded-full border border-slate-700 bg-slate-950 px-3 py-1.5 text-slate-300 hover:border-cyan-400/60"
+              >
+                {prompt}
+              </button>
             ))}
           </div>
-        </>
-      ) : (
-        <div className="placeholder-card">
-          <p>No expense data available for this month to generate a chart.</p>
-        </div>
-      )}
+
+          <div className="mt-3 h-64 overflow-y-auto rounded-xl border border-slate-700 bg-slate-950/70 p-3 space-y-2">
+            {chatMessages.map((msg, idx) => (
+              <div
+                key={`${msg.role}-${idx}`}
+                className={`max-w-[90%] rounded-xl px-3 py-2 text-sm ${
+                  msg.role === "assistant"
+                    ? "bg-slate-800 text-slate-100"
+                    : "ml-auto bg-cyan-500/20 border border-cyan-400/40 text-cyan-100"
+                }`}
+              >
+                {msg.content}
+              </div>
+            ))}
+            {chatLoading && (
+              <div className="max-w-[90%] rounded-xl px-3 py-2 text-sm bg-slate-800 text-slate-200 flex items-center gap-2">
+                <Loader2 size={14} className="animate-spin" /> Thinking...
+              </div>
+            )}
+          </div>
+
+          <form
+            className="mt-3 flex items-center gap-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              sendMessage(chatInput);
+            }}
+          >
+            <input
+              value={chatInput}
+              onChange={(event) => setChatInput(event.target.value)}
+              placeholder="Ask: Can I afford a weekend trip this month?"
+              className="flex-1 bg-slate-950 border border-slate-700 rounded-xl py-2.5 px-3 text-sm text-slate-100"
+            />
+            <button
+              type="submit"
+              disabled={chatLoading || !chatInput.trim()}
+              className="inline-flex items-center gap-1 rounded-xl border border-cyan-400/50 bg-cyan-500/15 px-3 py-2.5 text-sm text-cyan-200 disabled:opacity-60"
+            >
+              <Send size={14} /> Send
+            </button>
+          </form>
+        </article>
+      </section>
     </div>
   );
 };
