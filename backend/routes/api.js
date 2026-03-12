@@ -9,7 +9,7 @@ import {
   getAiSuggestion,
   getCanIAffordInsight,
 } from "../controllers/ai.controller.js";
-import { getDashboardStats } from "../controllers/budget.controller.js";
+import { getDashboardStats, getAnalysisSummary } from "../controllers/budget.controller.js";
 import { getAiBudgetBrief } from "../controllers/aiInsights.controller.js";
 import {
   contributeToGoal,
@@ -57,6 +57,11 @@ router.post("/transactions/seed", authMiddleware, seedDemoData);
 router.put("/transactions/:transactionId", authMiddleware, updateTransaction);
 router.delete("/transactions/:transactionId", authMiddleware, deleteTransaction);
 router.delete("/transactions", authMiddleware, clearTransactions);
+
+//$$$$$$
+// Analysis Routes
+router.get("/analysis/summary", authMiddleware, getAnalysisSummary);
+//$$$$$$
 
 router.get("/goals", authMiddleware, listGoals);
 router.post("/goals", authMiddleware, createGoal);

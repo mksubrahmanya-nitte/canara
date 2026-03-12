@@ -8,6 +8,7 @@ const initialForm = {
   email: "",
   password: "",
   monthlyBudget: "5000",
+  currency: "INR",
 };
 
 const Login = () => {
@@ -40,6 +41,7 @@ const Login = () => {
           email: formData.email,
           password: formData.password,
           monthlyBudget: Number(formData.monthlyBudget) || 5000,
+          currency: formData.currency,
         });
         setInfoMessage("Account created. Sign in to continue.");
         setIsLogin(true);
@@ -101,6 +103,7 @@ const Login = () => {
               onChange={(e) => onFieldChange("password", e.target.value)}
             />
           </div>
+          
 
           {!isLogin && (
             <div className="relative">

@@ -78,3 +78,43 @@ export const getDashboardStats = async (req, res) => {
     res.status(500).json({ error: "Analysis failed" });
   }
 };
+
+//$$$$$$
+export const getAnalysisSummary = async (req, res) => {
+  try {
+    const mode = req.query.mode === "demo" ? "demo" : "actual";
+    const month = req.query.month;
+    const { start, end } = getMonthRange(month);
+
+    const filter = {
+      userId: req.user.id,
+      entryMode: mode === "demo" ? "demo" : { $ne: "demo" },
+      transactionDate: { $gte: start, $lt: end },
+      type: "expense",
+    };
+
+    const analysis = await Expense.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: "$category",
+          total: { $sum: "$amount" },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          category: "$_id",
+          total: "$total",
+        },
+      },
+      { $sort: { total: -1 } },
+    ]);
+
+    res.status(200).json(analysis);
+  } catch (error) {
+    console.error("Analysis summary failed:", error);
+    res.status(500).json({ error: "Failed to get analysis summary" });
+  }
+};
+//$$$$$$
