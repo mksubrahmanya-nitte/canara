@@ -30,10 +30,25 @@ const SmartInput = ({ onTransactionAdded }) => {
   const [errorMessage, setErrorMessage] = useState("");
   const [aiSuggestion, setAiSuggestion] = useState(null);
 
+  const [scanning, setScanning] = useState(false);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [activeStream, setActiveStream] = useState(null);
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const fileInputRef = useRef(null);
+
   useEffect(() => {
     setCategory(categoryMap[type][0]);
     setIsEssential(type === "expense");
   }, [type]);
+
+  // Handle stream binding when modal opens
+  useEffect(() => {
+    if (isCameraOpen && activeStream && videoRef.current) {
+      videoRef.current.srcObject = activeStream;
+      videoRef.current.play().catch(err => console.error("Camera play error:", err));
+    }
+  }, [isCameraOpen, activeStream]);
 
   const categoryOptions = useMemo(() => categoryMap[type], [type]);
 
@@ -72,6 +87,113 @@ const SmartInput = ({ onTransactionAdded }) => {
     } finally {
       setAiLoading(false);
     }
+  };
+
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: false
+      });
+      setActiveStream(stream);
+      setIsCameraOpen(true);
+      setErrorMessage("");
+    } catch (error) {
+      console.error(error);
+      alert("Could not access camera. Please check permissions.");
+    }
+  };
+
+  const stopCamera = () => {
+    if (activeStream) {
+      activeStream.getTracks().forEach((track) => track.stop());
+      setActiveStream(null);
+    }
+    setIsCameraOpen(false);
+  };
+
+  const capturePhoto = () => {
+    if (!videoRef.current || !canvasRef.current) return;
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+
+    // Capture absolute raw frame
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    try {
+      // Apply Preprocessing: Grayscale + High Contrast
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+      const contrast = 1.6; // High contrast factor
+      const intercept = 120 * (1 - contrast);
+
+      for (let i = 0; i < data.length; i += 4) {
+        // Grayscale conversion (weighted)
+        const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+        const val = gray * contrast + intercept;
+        // Clamp 0-255
+        const final = Math.min(255, Math.max(0, val));
+        data[i] = data[i + 1] = data[i + 2] = final;
+      }
+      ctx.putImageData(imageData, 0, 0);
+    } catch (e) {
+      console.warn("Preprocessing failed, using raw image", e);
+    }
+
+    canvas.toBlob(async (blob) => {
+      if (!blob) return;
+      stopCamera();
+
+      const file = new File([blob], "receipt_capture.jpg", { type: "image/jpeg" });
+      await processImageForOcr(file);
+    }, "image/jpeg", 0.95);
+  };
+
+  const processImageForOcr = async (file) => {
+    try {
+      setScanning(true);
+      setErrorMessage("");
+
+      const formData = new FormData();
+      formData.append("image", file);
+
+      const { data } = await api.post("/api/ocr/scan", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      if (data.merchant || data.amount) {
+        if (data.merchant) setDescription(data.merchant);
+        if (data.amount) setAmount(String(data.amount));
+        setType("expense");
+      } else if (data.rawText && data.rawText.trim().length > 0) {
+        // Partial detection: text exists but extraction failed
+        const snippet = data.rawText.substring(0, 30).trim() + "...";
+        setDescription(snippet);
+        alert("Text detected, but could not accurately find merchant/amount. Please fill manually.");
+      } else {
+        alert("Could not detect any text in the image. Please try a clearer photo.");
+      }
+    } catch (error) {
+      console.error(error);
+      alert(error.response?.data?.message || "Could not detect transaction");
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const handleUploadClick = () => {
+    if (fileInputRef.current) fileInputRef.current.click();
+  };
+
+  const handleFileChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    await processImageForOcr(file);
+    event.target.value = "";
   };
 
   const handleSubmit = async (event) => {
@@ -139,11 +261,10 @@ const SmartInput = ({ onTransactionAdded }) => {
           <button
             type="button"
             onClick={() => setUseAi((prev) => !prev)}
-            className={`px-3 py-2 rounded-xl border text-xs sm:text-sm ${
-              useAi
+            className={`px-3 py-2 rounded-xl border text-xs sm:text-sm ${useAi
                 ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-300"
                 : "border-slate-700 bg-slate-800 text-slate-300"
-            }`}
+              }`}
           >
             AI Save: {useAi ? "ON" : "OFF"}
           </button>
