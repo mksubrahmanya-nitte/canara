@@ -425,3 +425,288 @@ export const getCanIAffordInsight = async (req, res) => {
 
 // Legacy alias kept for compatibility with previous frontend route.
 export const createSmartExpense = createSmartTransaction;
+
+
+//=====used incognito chatgpt for honest opinion on features:
+
+//$$$%%
+// ==========================
+// AI STUDENT BUDGET INSIGHTS
+// ==========================
+
+const buildMonthlyInsightPrompt = ({ metrics }) => `You are an AI financial coach for students.
+
+User metrics:
+${JSON.stringify(metrics)}
+
+Return STRICT JSON:
+
+{
+ "summary": "short monthly explanation",
+ "topSpendingCategory": "string",
+ "insights": ["max 3 short insights"],
+ "riskLevel": "low|medium|high"
+}
+`;
+
+const getMonthlyInsights = async (metrics) => {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) return null;
+
+  try {
+    const model = new GoogleGenerativeAI(apiKey).getGenerativeModel({
+      model: GEMINI_MODEL,
+      generationConfig: { responseMimeType: "application/json" },
+    });
+
+    const result = await model.generateContent(
+      buildMonthlyInsightPrompt({ metrics })
+    );
+
+    return safeJsonParse(result.response.text());
+  } catch {
+    return null;
+  }
+};
+
+export const getMonthlyAiReport = async (req, res) => {
+  try {
+    const { start, end } = getMonthRangeFromDate(new Date());
+
+    const transactions = await Expense.find({
+      userId: req.user.id,
+      transactionDate: { $gte: start, $lt: end },
+    });
+
+    const totalIncome = transactions
+      .filter((t) => t.type === "income")
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const totalExpenses = transactions
+      .filter((t) => t.type !== "income")
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const categories = {};
+
+    transactions.forEach((t) => {
+      if (t.type === "income") return;
+      categories[t.category] = (categories[t.category] || 0) + t.amount;
+    });
+
+    const metrics = {
+      totalIncome: roundToTwo(totalIncome),
+      totalExpenses: roundToTwo(totalExpenses),
+      categoryBreakdown: categories,
+    };
+
+    const aiInsights = await getMonthlyInsights(metrics);
+
+    return res.status(200).json({
+      metrics,
+      aiInsights,
+    });
+  } catch {
+    return res.status(500).json({ message: "AI report failed" });
+  }
+};
+
+
+
+//$$$%%
+// ==========================
+// END OF MONTH PREDICTION
+// ==========================
+
+export const getEndOfMonthPrediction = async (req, res) => {
+  try {
+    const today = new Date();
+    const { start, end } = getMonthRangeFromDate(today);
+
+    const transactions = await Expense.find({
+      userId: req.user.id,
+      transactionDate: { $gte: start, $lt: today },
+    });
+
+    const daysPassed = today.getDate();
+    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+    const daysRemaining = daysInMonth - daysPassed;
+
+    const totalExpenses = transactions
+      .filter((t) => t.type !== "income")
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const totalIncome = transactions
+      .filter((t) => t.type === "income")
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const avgDailySpend = totalExpenses / Math.max(daysPassed, 1);
+    const predictedSpend = avgDailySpend * daysRemaining;
+
+    const predictedBalance = totalIncome - (totalExpenses + predictedSpend);
+
+    return res.status(200).json({
+      avgDailySpend: roundToTwo(avgDailySpend),
+      predictedEndBalance: roundToTwo(predictedBalance),
+      daysRemaining,
+      riskLevel: predictedBalance < 0 ? "high" : predictedBalance < totalIncome * 0.1 ? "medium" : "low",
+    });
+  } catch {
+    return res.status(500).json({ message: "Prediction failed" });
+  }
+};
+
+
+
+//$$$%%
+// ==========================
+// SPENDING LEAK DETECTOR
+// ==========================
+
+export const detectSpendingLeaks = async (req, res) => {
+  try {
+    const { start, end } = getMonthRangeFromDate(new Date());
+
+    const transactions = await Expense.find({
+      userId: req.user.id,
+      transactionDate: { $gte: start, $lt: end },
+    });
+
+    const categoryCounts = {};
+    const categoryTotals = {};
+
+    transactions.forEach((t) => {
+      if (t.type === "income") return;
+
+      categoryCounts[t.category] = (categoryCounts[t.category] || 0) + 1;
+      categoryTotals[t.category] = (categoryTotals[t.category] || 0) + t.amount;
+    });
+
+    const leaks = Object.entries(categoryCounts)
+      .filter(([_, count]) => count >= 5)
+      .map(([category]) => ({
+        category,
+        frequency: categoryCounts[category],
+        totalSpent: roundToTwo(categoryTotals[category]),
+      }));
+
+    return res.status(200).json({ leaks });
+  } catch {
+    return res.status(500).json({ message: "Leak detection failed" });
+  }
+};
+
+
+
+//$$$%%
+// ==========================
+// SUBSCRIPTION DETECTOR
+// ==========================
+
+export const detectSubscriptions = async (req, res) => {
+  try {
+    const transactions = await Expense.find({
+      userId: req.user.id,
+    });
+
+    const merchantMap = {};
+
+    transactions.forEach((t) => {
+      const key = t.description.toLowerCase();
+
+      merchantMap[key] = merchantMap[key] || [];
+      merchantMap[key].push(t);
+    });
+
+    const subscriptions = Object.entries(merchantMap)
+      .filter(([_, txns]) => txns.length >= 3)
+      .map(([merchant, txns]) => ({
+        merchant,
+        occurrences: txns.length,
+        avgAmount: roundToTwo(
+          txns.reduce((s, t) => s + t.amount, 0) / txns.length
+        ),
+      }));
+
+    return res.status(200).json({ subscriptions });
+  } catch {
+    return res.status(500).json({ message: "Subscription detection failed" });
+  }
+};
+
+
+
+//$$$%%
+// ==========================
+// GOAL DELAY PREDICTION
+// ==========================
+
+export const getGoalDelayImpact = async (req, res) => {
+  try {
+    const amount = Number(req.body.amount);
+
+    const goals = await Goal.find({
+      userId: req.user.id,
+      isArchived: false,
+    });
+
+    const impacts = goals.map((goal) => {
+      const remaining =
+        (goal.targetAmount || 0) - (goal.savedAmount || 0);
+
+      const monthly = remaining / 6;
+
+      const delayMonths = Math.ceil(amount / monthly);
+
+      return {
+        goalId: goal._id,
+        title: goal.title,
+        potentialDelayMonths: delayMonths,
+      };
+    });
+
+    return res.status(200).json({ impacts });
+  } catch {
+    return res.status(500).json({ message: "Goal delay calculation failed" });
+  }
+};
+
+
+
+//$$$%%
+// ==========================
+// WEEKLY AI CHECK-IN
+// ==========================
+
+export const getWeeklyAiCheckin = async (req, res) => {
+  try {
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    const transactions = await Expense.find({
+      userId: req.user.id,
+      transactionDate: { $gte: weekAgo, $lte: now },
+    });
+
+    const totalSpent = transactions
+      .filter((t) => t.type !== "income")
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const categories = {};
+
+    transactions.forEach((t) => {
+      if (t.type === "income") return;
+      categories[t.category] = (categories[t.category] || 0) + t.amount;
+    });
+
+    return res.status(200).json({
+      totalSpent: roundToTwo(totalSpent),
+      categories,
+      message:
+        totalSpent > 2000
+          ? "High spending week detected."
+          : "Spending looks balanced this week.",
+    });
+  } catch {
+    return res.status(500).json({ message: "Weekly check-in failed" });
+  }
+};  

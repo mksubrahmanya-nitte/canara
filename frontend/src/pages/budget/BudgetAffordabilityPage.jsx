@@ -1,7 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, PiggyBank, Sparkles, Target, Trash2, Wallet } from "lucide-react";
+import {
+  Loader2,
+  PiggyBank,
+  Sparkles,
+  Target,
+  Trash2,
+  Wallet,
+  PlusCircle,
+  Wand2,
+  FileText,
+} from "lucide-react";
 import api from "../../lib/api";
 import { useBudgetOutlet } from "./useBudgetOutlet";
+import AiBudgetBrief from "./AiBudgetBrief.jsx";
+
 
 const getToday = () => {
   const d = new Date();
@@ -15,7 +27,11 @@ const formatDate = (value) => {
   if (!value) return "No deadline";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "No deadline";
-  return date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  return date.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 };
 
 const BudgetAffordabilityPage = () => {
@@ -31,6 +47,7 @@ const BudgetAffordabilityPage = () => {
     targetDate: "",
     note: "",
   });
+
   const [contributionMap, setContributionMap] = useState({});
 
   const [affordabilityForm, setAffordabilityForm] = useState({
@@ -39,8 +56,15 @@ const BudgetAffordabilityPage = () => {
     plannedDate: getToday(),
     goalId: "",
   });
+
   const [checkingAffordability, setCheckingAffordability] = useState(false);
   const [affordabilityResult, setAffordabilityResult] = useState(null);
+
+  const [aiTransactionBusy, setAiTransactionBusy] = useState(false);
+  const [aiSuggestionBusy, setAiSuggestionBusy] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState([]);
+  const [aiBrief, setAiBrief] = useState(null);
+  const [loadingBrief, setLoadingBrief] = useState(false);
 
   const loadGoals = useCallback(async () => {
     try {
@@ -60,11 +84,12 @@ const BudgetAffordabilityPage = () => {
 
   const totalGoalRemaining = useMemo(
     () => goals.reduce((sum, goal) => sum + Number(goal.remainingAmount || 0), 0),
-    [goals],
+    [goals]
   );
 
   const handleCreateGoal = async (event) => {
     event.preventDefault();
+
     const targetAmount = Number(goalForm.targetAmount);
 
     if (!goalForm.title.trim() || !Number.isFinite(targetAmount) || targetAmount <= 0) {
@@ -74,14 +99,23 @@ const BudgetAffordabilityPage = () => {
 
     try {
       setBusy(true);
+
       await api.post("/api/goals", {
         title: goalForm.title,
         targetAmount,
         targetDate: goalForm.targetDate || undefined,
         note: goalForm.note,
       });
-      setGoalForm({ title: "", targetAmount: "", targetDate: "", note: "" });
+
+      setGoalForm({
+        title: "",
+        targetAmount: "",
+        targetDate: "",
+        note: "",
+      });
+
       await loadGoals();
+
       notify("success", "Savings goal created.");
     } catch (error) {
       notify("error", error.response?.data?.message || "Could not create goal.");
@@ -92,6 +126,7 @@ const BudgetAffordabilityPage = () => {
 
   const handleContribute = async (goal) => {
     const amount = Number(contributionMap[goal._id] || 0);
+
     if (!Number.isFinite(amount) || amount <= 0) {
       notify("error", "Enter a valid contribution amount.");
       return;
@@ -99,12 +134,19 @@ const BudgetAffordabilityPage = () => {
 
     try {
       setBusy(true);
+
       await api.post(`/api/goals/${goal._id}/contribute`, {
         amount,
         transactionDate: getToday(),
       });
-      setContributionMap((prev) => ({ ...prev, [goal._id]: "" }));
+
+      setContributionMap((prev) => ({
+        ...prev,
+        [goal._id]: "",
+      }));
+
       await Promise.all([loadGoals(), refreshData()]);
+
       notify("success", "Contribution added and logged in transactions.");
     } catch (error) {
       notify("error", error.response?.data?.message || "Could not contribute to goal.");
@@ -116,8 +158,11 @@ const BudgetAffordabilityPage = () => {
   const handleDeleteGoal = async (goalId) => {
     try {
       setBusy(true);
+
       await api.delete(`/api/goals/${goalId}`);
+
       await loadGoals();
+
       notify("success", "Goal archived.");
     } catch (error) {
       notify("error", error.response?.data?.message || "Could not remove goal.");
@@ -128,7 +173,9 @@ const BudgetAffordabilityPage = () => {
 
   const handleAffordabilityCheck = async (event) => {
     event.preventDefault();
+
     const amount = Number(affordabilityForm.amount);
+
     if (!affordabilityForm.itemName.trim() || !Number.isFinite(amount) || amount <= 0) {
       notify("error", "Add a valid item name and amount.");
       return;
@@ -136,12 +183,14 @@ const BudgetAffordabilityPage = () => {
 
     try {
       setCheckingAffordability(true);
+
       const { data } = await api.post("/api/transactions/ai-afford", {
         itemName: affordabilityForm.itemName,
         amount,
         plannedDate: affordabilityForm.plannedDate || getToday(),
         goalId: affordabilityForm.goalId || undefined,
       });
+
       setAffordabilityResult(data);
     } catch (error) {
       notify("error", error.response?.data?.message || "Affordability check failed.");
@@ -150,114 +199,187 @@ const BudgetAffordabilityPage = () => {
     }
   };
 
+  const handleCreateSmartTransaction = async () => {
+    if (!affordabilityForm.itemName.trim() || !affordabilityForm.amount) {
+      notify("error", "Please enter item name and amount to create transaction.");
+      return;
+    }
+
+    try {
+      setAiTransactionBusy(true);
+
+      const { data } = await api.post("/api/transactions/ai-add", {
+        description: affordabilityForm.itemName, // <--- Change the key to 'description'
+        amount: Number(affordabilityForm.amount),
+        plannedDate: affordabilityForm.plannedDate || getToday(),
+        goalId: affordabilityForm.goalId || undefined,
+      });
+
+      notify("success", `AI Transaction created: ${data.transactionId || "Success"}`);
+
+      await refreshData();
+    } catch (error) {
+      notify("error", error.response?.data?.message || "AI transaction creation failed.");
+    } finally {
+      setAiTransactionBusy(false);
+    }
+  };
+
+  const handleGetAiSuggestion = async () => {
+    try {
+      setAiSuggestionBusy(true);
+
+      const { data } = await api.post("/api/transactions/ai-suggest", {
+        description: affordabilityForm.itemName, 
+        amount: Number(affordabilityForm.amount) || 0,
+        transactionDate: affordabilityForm.plannedDate || getToday()
+      });
+
+      setAiSuggestions(data.suggestions || []);
+
+      notify("success", "AI suggestions loaded.");
+    } catch (error) {
+      notify("error", error.response?.data?.message || "Failed to get AI suggestions.");
+    } finally {
+      setAiSuggestionBusy(false);
+    }
+  };
+
+  const loadAiBrief = useCallback(async () => {
+    try {
+      setLoadingBrief(true);
+
+      const { data } = await api.get("/api/transactions/ai-brief");
+
+      setAiBrief(data);
+    } catch {
+      notify("error", "Failed to load AI budget brief.");
+    } finally {
+      setLoadingBrief(false);
+    }
+  }, [notify]);
+
+  useEffect(() => {
+    loadAiBrief();
+  }, [loadAiBrief]);
+
   return (
     <div className="grid grid-cols-1 xl:grid-cols-[1.15fr_1fr] gap-4">
       <section className="space-y-4">
         <article className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 sm:p-5">
           <h2 className="font-semibold text-white flex items-center gap-2">
-            <Sparkles size={16} className="text-cyan-300" /> Can I Afford This? AI
+            <Sparkles size={16} className="text-cyan-300" />
+            Can I Afford This? AI
           </h2>
-          <p className="text-sm text-slate-400 mt-1">
-            Simulate a purchase and get AI-backed guidance with your live cashflow and goal pressure.
-          </p>
 
           <form onSubmit={handleAffordabilityCheck} className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
             <input
               value={affordabilityForm.itemName}
-              onChange={(event) => setAffordabilityForm((prev) => ({ ...prev, itemName: event.target.value }))}
+              onChange={(e) =>
+                setAffordabilityForm((prev) => ({ ...prev, itemName: e.target.value }))
+              }
               placeholder="Item (e.g., Noise-cancelling headphones)"
               className="md:col-span-2 bg-slate-950 border border-slate-700 rounded-xl py-2.5 px-3 text-sm"
             />
+
             <input
               type="number"
               min="1"
               step="0.01"
               value={affordabilityForm.amount}
-              onChange={(event) => setAffordabilityForm((prev) => ({ ...prev, amount: event.target.value }))}
+              onChange={(e) =>
+                setAffordabilityForm((prev) => ({ ...prev, amount: e.target.value }))
+              }
               placeholder="Price"
               className="bg-slate-950 border border-slate-700 rounded-xl py-2.5 px-3 text-sm"
             />
+
             <input
               type="date"
               value={affordabilityForm.plannedDate}
-              onChange={(event) => setAffordabilityForm((prev) => ({ ...prev, plannedDate: event.target.value }))}
+              onChange={(e) =>
+                setAffordabilityForm((prev) => ({ ...prev, plannedDate: e.target.value }))
+              }
               className="bg-slate-950 border border-slate-700 rounded-xl py-2.5 px-3 text-sm"
             />
+
             <select
               value={affordabilityForm.goalId}
-              onChange={(event) => setAffordabilityForm((prev) => ({ ...prev, goalId: event.target.value }))}
+              onChange={(e) =>
+                setAffordabilityForm((prev) => ({ ...prev, goalId: e.target.value }))
+              }
               className="md:col-span-2 bg-slate-950 border border-slate-700 rounded-xl py-2.5 px-3 text-sm"
             >
               <option value="">No specific goal focus</option>
+
               {goals.map((goal) => (
                 <option key={goal._id} value={goal._id}>
                   {goal.title}
                 </option>
               ))}
             </select>
+
             <button
               type="submit"
               disabled={checkingAffordability}
               className="md:col-span-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 py-2.5 px-3 text-sm font-semibold disabled:opacity-60 flex items-center justify-center gap-2"
             >
-              {checkingAffordability ? <Loader2 size={16} className="animate-spin" /> : <Wallet size={15} />}
+              {checkingAffordability ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <Wallet size={15} />
+              )}
               Analyze Affordability
             </button>
           </form>
+
+          {affordabilityResult && (
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                onClick={handleCreateSmartTransaction}
+                disabled={aiTransactionBusy}
+                className="rounded-xl bg-indigo-600 hover:bg-indigo-700 py-2.5 px-3 text-sm font-semibold disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {aiTransactionBusy ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <PlusCircle size={15} />
+                )}
+                Log as Expense
+              </button>
+
+              <button
+                onClick={handleGetAiSuggestion}
+                disabled={aiSuggestionBusy}
+                className="rounded-xl bg-purple-600 hover:bg-purple-700 py-2.5 px-3 text-sm font-semibold disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {aiSuggestionBusy ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <Wand2 size={15} />
+                )}
+                Get AI Tips
+              </button>
+            </div>
+          )}
+
+          {aiSuggestions.length > 0 && (
+            <ul className="mt-3 space-y-2 text-sm text-slate-300">
+              {aiSuggestions.map((s, i) => (
+                <li key={i} className="border border-slate-700 rounded-md p-2">
+                  {s}
+                </li>
+              ))}
+            </ul>
+          )}
         </article>
 
         {affordabilityResult && (
-          <article className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 sm:p-5 animate-fade-in">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="font-semibold text-white">{affordabilityResult.itemName}</p>
-              <span
-                className={`text-xs px-2 py-1 rounded-full border ${
-                  affordabilityResult.decision?.canAfford
-                    ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
-                    : "border-red-500/40 bg-red-500/10 text-red-300"
-                }`}
-              >
-                {affordabilityResult.decision?.canAfford ? "Affordable now" : "Not ideal now"}
-              </span>
-            </div>
-
-            <p className="text-sm text-slate-300 mt-2">{affordabilityResult.decision?.summary}</p>
-
-            <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                <p className="text-slate-400">Item Price</p>
-                <p className="text-lg font-bold text-white">{money(affordabilityResult.amount)}</p>
-              </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                <p className="text-slate-400">Spendable Now</p>
-                <p className="text-lg font-bold text-white">{money(affordabilityResult.context?.spendableNow)}</p>
-              </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                <p className="text-slate-400">After Purchase</p>
-                <p
-                  className={`text-lg font-bold ${
-                    Number(affordabilityResult.context?.projectedAfterPurchase || 0) >= 0
-                      ? "text-emerald-300"
-                      : "text-red-300"
-                  }`}
-                >
-                  {money(affordabilityResult.context?.projectedAfterPurchase)}
-                </p>
-              </div>
-            </div>
-
-            {Array.isArray(affordabilityResult.decision?.reasoning) && affordabilityResult.decision.reasoning.length > 0 && (
-              <div className="mt-3 space-y-1">
-                {affordabilityResult.decision.reasoning.map((line) => (
-                  <p key={line} className="text-sm text-slate-300">
-                    • {line}
-                  </p>
-                ))}
-              </div>
-            )}
-
-            <p className="mt-3 text-sm text-cyan-200 border border-cyan-500/30 bg-cyan-500/10 rounded-xl px-3 py-2">
-              {affordabilityResult.decision?.recommendedAction}
+          <article className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 sm:p-5">
+            <h3 className="font-semibold text-white">AI Affordability Analysis</h3>
+            <p className="text-white font-semibold mt-3">{affordabilityResult.itemName}</p>
+            <p className="text-sm text-slate-300 mt-2">
+              {affordabilityResult.decision?.summary}
             </p>
           </article>
         )}
@@ -266,122 +388,77 @@ const BudgetAffordabilityPage = () => {
       <section className="space-y-4">
         <article className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 sm:p-5">
           <h2 className="font-semibold text-white flex items-center gap-2">
-            <Target size={16} className="text-emerald-300" /> Savings Goals
+            <FileText size={16} className="text-teal-400" />
+            AI Budget Brief
           </h2>
-          <p className="text-sm text-slate-400 mt-1">Save money for big targets and track progress.</p>
+
+          {loadingBrief ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="animate-spin text-slate-300" size={24} />
+            </div>
+          ) : aiBrief ? (
+            <AiBudgetBrief brief={aiBrief} />
+          ) : (
+            <p className="text-slate-400 text-center py-4">No brief data available.</p>
+          )}
+        </article>
+
+        <article className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 sm:p-5">
+          <h2 className="font-semibold text-white flex items-center gap-2">
+            <Target size={16} className="text-emerald-300" />
+            Savings Goals
+          </h2>
+
 
           <form onSubmit={handleCreateGoal} className="mt-4 grid grid-cols-1 gap-3">
             <input
               value={goalForm.title}
-              onChange={(event) => setGoalForm((prev) => ({ ...prev, title: event.target.value }))}
+              onChange={(e) =>
+                setGoalForm((prev) => ({ ...prev, title: e.target.value }))
+              }
               placeholder="Goal name (e.g., New Laptop)"
               className="bg-slate-950 border border-slate-700 rounded-xl py-2.5 px-3 text-sm"
             />
+
             <input
               type="number"
               min="1"
               step="0.01"
               value={goalForm.targetAmount}
-              onChange={(event) => setGoalForm((prev) => ({ ...prev, targetAmount: event.target.value }))}
+              onChange={(e) =>
+                setGoalForm((prev) => ({ ...prev, targetAmount: e.target.value }))
+              }
               placeholder="Target amount"
               className="bg-slate-950 border border-slate-700 rounded-xl py-2.5 px-3 text-sm"
             />
+
             <input
               type="date"
               value={goalForm.targetDate}
-              onChange={(event) => setGoalForm((prev) => ({ ...prev, targetDate: event.target.value }))}
+              onChange={(e) =>
+                setGoalForm((prev) => ({ ...prev, targetDate: e.target.value }))
+              }
               className="bg-slate-950 border border-slate-700 rounded-xl py-2.5 px-3 text-sm"
             />
+
             <textarea
               rows={2}
               value={goalForm.note}
-              onChange={(event) => setGoalForm((prev) => ({ ...prev, note: event.target.value }))}
+              onChange={(e) =>
+                setGoalForm((prev) => ({ ...prev, note: e.target.value }))
+              }
               placeholder="Why this matters (optional)"
               className="bg-slate-950 border border-slate-700 rounded-xl py-2.5 px-3 text-sm resize-none"
             />
+
             <button
               type="submit"
               disabled={busy}
-              className="rounded-xl bg-emerald-600 hover:bg-emerald-700 py-2.5 px-3 text-sm font-semibold disabled:opacity-60"
+              className="rounded-xl bg-emerald-600 hover:bg-emerald-700 py-2.5 px-3 text-sm font-semibold"
             >
               Create Goal
             </button>
           </form>
-        </article>
-
-        <article className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 sm:p-5">
-          <div className="flex items-center justify-between gap-2">
-            <p className="font-semibold text-white flex items-center gap-2">
-              <PiggyBank size={16} className="text-indigo-300" /> Active Goals
-            </p>
-            <p className="text-xs text-slate-400">Remaining: {money(totalGoalRemaining)}</p>
-          </div>
-
-          {loadingGoals ? (
-            <div className="py-6 flex items-center justify-center">
-              <Loader2 className="animate-spin text-slate-300" size={20} />
-            </div>
-          ) : goals.length === 0 ? (
-            <div className="mt-3 rounded-xl border border-dashed border-slate-700 p-4 text-sm text-slate-400">
-              No goals yet. Create one to start saving intentionally.
-            </div>
-          ) : (
-            <div className="mt-3 space-y-2.5 max-h-[540px] overflow-y-auto">
-              {goals.map((goal) => {
-                const progressPercent = Math.min(Number(goal.progressPercent || 0), 100);
-                return (
-                  <div key={goal._id} className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="font-medium text-white truncate">{goal.title}</p>
-                        <p className="text-xs text-slate-400">
-                          Target: {money(goal.targetAmount)} | Saved: {money(goal.savedAmount)} | Due:{" "}
-                          {formatDate(goal.targetDate)}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => handleDeleteGoal(goal._id)}
-                        disabled={busy}
-                        className="p-2 rounded-lg border border-red-500/30 bg-red-500/10 text-red-300 disabled:opacity-60"
-                        title="Archive goal"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-
-                    <div className="mt-2 h-2 rounded-full bg-slate-800 overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-emerald-500 to-cyan-400" style={{ width: `${progressPercent}%` }} />
-                    </div>
-
-                    <p className="text-xs text-slate-400 mt-1">
-                      {progressPercent.toFixed(1)}% complete | Remaining: {money(goal.remainingAmount)}
-                    </p>
-
-                    <div className="mt-2 flex gap-2">
-                      <input
-                        type="number"
-                        min="1"
-                        step="0.01"
-                        value={contributionMap[goal._id] || ""}
-                        onChange={(event) =>
-                          setContributionMap((prev) => ({ ...prev, [goal._id]: event.target.value }))
-                        }
-                        placeholder="Add amount"
-                        className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm"
-                      />
-                      <button
-                        onClick={() => handleContribute(goal)}
-                        disabled={busy}
-                        className="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-sm font-semibold disabled:opacity-60"
-                      >
-                        Save
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
         </article>
       </section>
     </div>

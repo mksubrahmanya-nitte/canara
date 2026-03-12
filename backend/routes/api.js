@@ -3,12 +3,23 @@ const router = express.Router();
 
 // Import Controllers
 import { login, logout, me, refresh, register, updateBudget } from "../controllers/auth.controller.js";
+
 import {
   createSmartExpense,
   createSmartTransaction,
   getAiSuggestion,
   getCanIAffordInsight,
+
+  // $$$%% AI insights features
+  getMonthlyAiReport,
+  getEndOfMonthPrediction,
+  detectSpendingLeaks,
+  detectSubscriptions,
+  getGoalDelayImpact,
+  getWeeklyAiCheckin,
+
 } from "../controllers/ai.controller.js";
+
 import { getDashboardStats, getAnalysisSummary } from "../controllers/budget.controller.js";
 import { getAiBudgetBrief } from "../controllers/aiInsights.controller.js";
 import {
@@ -62,6 +73,24 @@ router.delete("/transactions", authMiddleware, clearTransactions);
 // Analysis Routes
 router.get("/analysis/summary", authMiddleware, getAnalysisSummary);
 //$$$$$$
+
+// $$$%% Advanced AI Insights
+
+router.get("/ai/report/monthly", authMiddleware, getMonthlyAiReport);
+
+router.get("/ai/prediction/end-month", authMiddleware, getEndOfMonthPrediction);
+
+router.get("/ai/insights/leaks", authMiddleware, detectSpendingLeaks);
+
+router.get("/ai/insights/subscriptions", authMiddleware, detectSubscriptions);
+
+router.post("/ai/goals/delay-impact", authMiddleware, getGoalDelayImpact);
+
+router.get("/ai/checkin/weekly", authMiddleware, getWeeklyAiCheckin);
+
+
+
+//dssdfsf
 
 router.get("/goals", authMiddleware, listGoals);
 router.post("/goals", authMiddleware, createGoal);

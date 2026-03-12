@@ -1,6 +1,6 @@
 import Expense from "../models/expense.js";
 
-const VALID_TYPES = ["income", "expense"];
+const VALID_TYPES = ["income", "expense", "transfer"];
 const VALID_MODES = ["demo", "actual"];
 const DEFAULT_CATEGORIES = {
   income: ["Salary", "Freelance", "Investments", "Refund", "Gift", "Other"],
