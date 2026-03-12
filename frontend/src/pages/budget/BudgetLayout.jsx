@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import NotificationIcon from "../../components/NotificationIcon";
+import { useNotification } from "../../context/notification-context.jsx";
 import {
   CalendarDays,
   ChevronLeft,
@@ -38,6 +39,7 @@ const navItems = [
 const BudgetLayout = () => {
   const navigate = useNavigate();
   const { user, logout, setUser } = useAuth();
+  const { addSuccess, addError, addWarning, addInfo } = useNotification();
 
   const [currentMonth, setCurrentMonth] = useState(() => {
     const d = new Date();
@@ -82,7 +84,14 @@ const BudgetLayout = () => {
     flashTimeoutRef.current = window.setTimeout(() => {
       setFlash({ type: "", text: "" });
     }, 2600);
-  }, []);
+    
+    // Also add to notification system
+    if (type === "error") {
+      addError(text, { title: "Error" });
+    } else {
+      addSuccess(text, { title: "Success" });
+    }
+  }, [addError, addSuccess]);
 
   useEffect(() => {
     setBudgetInput(String(user?.monthlyBudget || 5000));

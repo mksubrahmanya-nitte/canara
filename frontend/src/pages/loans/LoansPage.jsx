@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Plus, RefreshCcw, Loader2, Handshake } from "lucide-react";
 import { getLoans, getLoanSummary } from "../../lib/loans";
+import { useNotification } from "../../context/notification-context.jsx";
 import LoanCard from "./LoanCard";
 import LoanSummaryCard from "./LoanSummaryCard";
 import AddLoanModal from "./AddLoanModal";
@@ -11,7 +12,36 @@ const EmptySection = ({ label }) => (
   </div>
 );
 
+const getDaysUntilDue = (dueDate) => {
+  const due = new Date(dueDate);
+  const today = new Date();
+  const diffTime = due - today;
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+};
+
+const checkAndAddLoanNotifications = (loans, addWarning) => {
+  loans.forEach((loan) => {
+    if (loan.status === "pending") {
+      const daysLeft = getDaysUntilDue(loan.dueDate);
+      if (daysLeft < 0) {
+        addWarning(`${loan.personName}'s loan is overdue by ${Math.abs(daysLeft)} days!`, {
+          title: "⚠️ Overdue Loan",
+        });
+      } else if (daysLeft === 0) {
+        addWarning(`${loan.personName}'s loan is due today!`, {
+          title: "📌 Due Today",
+        });
+      } else if (daysLeft <= 3) {
+        addWarning(`${loan.personName}'s loan is due in ${daysLeft} days`, {
+          title: "📅 Due Soon",
+        });
+      }
+    }
+  });
+};
+
 const LoansPage = () => {
+  const { addWarning, addSuccess } = useNotification();
   const [loans, setLoans] = useState([]);
   const [summary, setSummary] = useState({ totalLent: 0, totalBorrowed: 0, netBalance: 0 });
   const [loading, setLoading] = useState(true);
@@ -29,12 +59,17 @@ const LoansPage = () => {
       const [loanData, summaryData] = await Promise.all([getLoans(), getLoanSummary()]);
       setLoans(loanData || []);
       setSummary(summaryData || { totalLent: 0, totalBorrowed: 0, netBalance: 0 });
+      
+      // Check for overdue/due soon loans and add notifications
+      if (loanData && loanData.length > 0) {
+        checkAndAddLoanNotifications(loanData, addWarning);
+      }
     } catch {
       notify("error", "Could not load loans.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [addWarning]);
 
   useEffect(() => {
     fetchAll();
@@ -46,18 +81,21 @@ const LoansPage = () => {
     // Refresh summary totals after a status change
     getLoanSummary().then(setSummary).catch(() => {});
     notify("success", "Marked as paid ✅");
+    addSuccess("Marked as paid ✅", { title: "Loan Updated" });
   };
 
   const handleDelete = (id) => {
     setLoans((prev) => prev.filter((l) => l._id !== id));
     getLoanSummary().then(setSummary).catch(() => {});
     notify("success", "Loan record removed.");
+    addSuccess("Loan record removed", { title: "Loan Deleted" });
   };
 
   const handleCreated = (loan) => {
     setLoans((prev) => [loan, ...prev]);
     getLoanSummary().then(setSummary).catch(() => {});
     notify("success", "Loan recorded! 🤝");
+    addSuccess(`Loan with ${loan.personName} recorded!`, { title: "Loan Created 🤝" });
   };
 
   // Split into lent / borrowed; pending first, then paid

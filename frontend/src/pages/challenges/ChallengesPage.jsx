@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   Trophy, Flame, Plus, RefreshCcw, Loader2, Swords, Star, Crown,
 } from "lucide-react";
+import { useNotification } from "../../context/notification-context.jsx";
 import { getChallenges, getStats, getSuggestion, deleteChallenge } from "../../lib/challenges";
 import ChallengeCard from "./ChallengeCard";
 import CreateChallengeModal from "./CreateChallengeModal";
@@ -23,6 +24,7 @@ const EmptySection = ({ message }) => (
 );
 
 const ChallengesPage = () => {
+  const { addSuccess, addError, addWarning } = useNotification();
   const [challenges, setChallenges] = useState([]);
   const [stats, setStats] = useState({ totalPoints: 0, rank: "Beginner", completedCount: 0 });
   const [suggestion, setSuggestion] = useState(null);
@@ -33,6 +35,13 @@ const ChallengesPage = () => {
   const notify = (type, text) => {
     setFlash({ type, text });
     setTimeout(() => setFlash({ type: "", text: "" }), 2800);
+    
+    // Also add to notification system
+    if (type === "error") {
+      addError(text, { title: "Error" });
+    } else {
+      addSuccess(text, { title: "Success" });
+    }
   };
 
   const fetchAll = useCallback(async () => {
@@ -51,7 +60,7 @@ const ChallengesPage = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [addSuccess, addError]);
 
   useEffect(() => {
     fetchAll();
@@ -63,14 +72,17 @@ const ChallengesPage = () => {
       await deleteChallenge(id);
       setChallenges((prev) => prev.filter((c) => c._id !== id));
       notify("success", "Challenge deleted.");
+      addSuccess("Challenge deleted successfully", { title: "Removed" });
     } catch {
       notify("error", "Failed to delete challenge.");
+      addError("Could not delete challenge", { title: "Error" });
     }
   };
 
   const handleCreated = (newChallenge) => {
     setChallenges((prev) => [newChallenge, ...prev]);
     notify("success", "Challenge started! 🔥");
+    addSuccess("Challenge started! Get ready to save! 🔥", { title: "New Challenge" });
   };
 
   // Use the full list for completed/failed (no riskWarning needed)
