@@ -6,6 +6,7 @@ import BudgetCalendarPage from "./pages/budget/BudgetCalendarPage";
 import BudgetTransactionsPage from "./pages/budget/BudgetTransactionsPage";
 import BudgetAffordabilityPage from "./pages/budget/BudgetAffordabilityPage";
 import AnalysisPage from "./pages/budget/AnalysisPage"; //$$$$$$
+import SettingsPage from "./pages/budget/SettingsPage";
 import { useAuth } from "./context/useAuth";
 
 const FullScreenLoader = () => (
@@ -60,6 +61,7 @@ function App() {
           <Route path="affordability" element={<BudgetAffordabilityPage />} />
           <Route path="calendar" element={<BudgetCalendarPage />} />
           <Route path="transactions" element={<BudgetTransactionsPage />} />
+          <Route path="settings" element={<SettingsPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard/overview" replace />} />
       </Routes>

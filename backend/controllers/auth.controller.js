@@ -32,11 +32,11 @@ const createAndPersistSession = async (res, userId) => {
 
 export const register = async (req, res) => {
   try {
-    const { name, email, password, monthlyBudget } = req.body;
+    const { name, email, password, monthlyBudget, currency } = req.body;
     const normalizedEmail = normalizeEmail(email);
 
-    if (!name?.trim() || !normalizedEmail || !password) {
-      return res.status(400).json({ message: "Name, email and password are required" });
+    if (!name?.trim() || !normalizedEmail || !password || monthlyBudget === undefined) {
+      return res.status(400).json({ message: "Name, email, password and monthly budget are required" });
     }
 
     if (password.length < MIN_PASSWORD_LENGTH) {
@@ -52,13 +52,22 @@ export const register = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 12);
     const parsedBudget = Number(monthlyBudget);
-    const safeBudget = Number.isFinite(parsedBudget) && parsedBudget > 0 ? parsedBudget : 5000;
+    
+    if (!Number.isFinite(parsedBudget) || parsedBudget <= 0) {
+      return res.status(400).json({ message: "Monthly budget must be a positive number" });
+    }
+
+    const normalizedCurrency = String(currency || "INR").trim().toUpperCase();
+    if (!normalizedCurrency || normalizedCurrency.length > 5) {
+      return res.status(400).json({ message: "Currency is invalid" });
+    }
 
     const user = await User.create({
       name: name.trim(),
       email: normalizedEmail,
       password: hashedPassword,
-      monthlyBudget: safeBudget,
+      monthlyBudget: parsedBudget,
+      currency: normalizedCurrency,
     });
 
     res.status(201).json({ message: "Account created successfully", user: sanitizeUser(user) });

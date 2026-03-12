@@ -11,6 +11,7 @@ import {
   PlusCircle,
   ReceiptText,
   RefreshCcw,
+  Settings,
   Sparkles,
   Zap,
   PieChart, //$$$$$$
@@ -25,6 +26,7 @@ const navItems = [
   { to: "/dashboard/affordability", label: "Affordability AI", icon: Sparkles },
   { to: "/dashboard/calendar", label: "Calendar", icon: CalendarDays },
   { to: "/dashboard/transactions", label: "Transactions", icon: ReceiptText },
+  { to: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
 
 const BudgetLayout = () => {

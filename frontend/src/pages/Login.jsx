@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Lock, Mail, User, Wallet, Zap } from "lucide-react";
+import { ArrowRight, Lock, Mail, User, Wallet, Zap, IndianRupee } from "lucide-react";
 import { useAuth } from "../context/useAuth";
 
 const initialForm = {
   name: "",
   email: "",
   password: "",
-  monthlyBudget: "5000",
+  monthlyBudget: "",
   currency: "INR",
 };
 
@@ -40,7 +40,7 @@ const Login = () => {
           name: formData.name,
           email: formData.email,
           password: formData.password,
-          monthlyBudget: Number(formData.monthlyBudget) || 5000,
+          monthlyBudget: Number(formData.monthlyBudget),
           currency: formData.currency,
         });
         setInfoMessage("Account created. Sign in to continue.");
@@ -106,17 +106,35 @@ const Login = () => {
           
 
           {!isLogin && (
-            <div className="relative">
-              <Wallet className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-              <input
-                type="number"
-                min="1"
-                step="1"
-                placeholder="Monthly Budget"
-                className="w-full bg-slate-900/50 border border-slate-700 rounded-2xl py-3 px-12 outline-none focus:ring-2 focus:ring-indigo-500/50 text-white"
-                value={formData.monthlyBudget}
-                onChange={(e) => onFieldChange("monthlyBudget", e.target.value)}
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="relative">
+                <Wallet className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  placeholder="Monthly Budget"
+                  required
+                  className="w-full bg-slate-900/50 border border-slate-700 rounded-2xl py-3 pl-12 pr-4 outline-none focus:ring-2 focus:ring-indigo-500/50 text-white"
+                  value={formData.monthlyBudget}
+                  onChange={(e) => onFieldChange("monthlyBudget", e.target.value)}
+                />
+              </div>
+              <div className="relative">
+                <IndianRupee className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                <select
+                  required
+                  className="w-full bg-slate-900/50 border border-slate-700 rounded-2xl py-3 pl-12 pr-4 outline-none focus:ring-2 focus:ring-indigo-500/50 text-white appearance-none"
+                  value={formData.currency}
+                  onChange={(e) => onFieldChange("currency", e.target.value)}
+                >
+                  <option value="INR">INR</option>
+                  <option value="USD">USD</option>
+                  <option value="EUR">EUR</option>
+                  <option value="GBP">GBP</option>
+                  <option value="JPY">JPY</option>
+                </select>
+              </div>
             </div>
           )}
 
