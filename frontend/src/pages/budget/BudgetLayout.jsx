@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-//$$$$$$
+import NotificationIcon from "../../components/NotificationIcon";
 import {
   CalendarDays,
   ChevronLeft,
@@ -14,7 +14,10 @@ import {
   Settings,
   Sparkles,
   Zap,
-  PieChart, //$$$$$$
+  PieChart,
+  PiggyBank,
+  Trophy,
+  Handshake,
 } from "lucide-react";
 import api from "../../lib/api";
 import { formatMonthKey, monthTitle } from "../../lib/budget";
@@ -22,10 +25,13 @@ import { useAuth } from "../../context/useAuth";
 
 const navItems = [
   { to: "/dashboard/overview", label: "Overview", icon: LayoutDashboard },
-  { to: "/dashboard/analysis", label: "Analysis", icon: PieChart }, //$$$$$$
+  { to: "/dashboard/analysis", label: "Analysis", icon: PieChart },
   { to: "/dashboard/affordability", label: "Affordability AI", icon: Sparkles },
   { to: "/dashboard/calendar", label: "Calendar", icon: CalendarDays },
   { to: "/dashboard/transactions", label: "Transactions", icon: ReceiptText },
+  { to: "/dashboard/budget-categories", label: "Budget Categories", icon: PiggyBank },
+  { to: "/dashboard/challenges", label: "Challenges", icon: Trophy },
+  { to: "/dashboard/loans", label: "Friend Loans", icon: Handshake },
   { to: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
 
@@ -260,6 +266,7 @@ const BudgetLayout = () => {
                   <p className="text-sm text-slate-400 mt-1">Navigate sections from the sidebar.</p>
                 </div>
                 <div className="flex items-center gap-2">
+                  <NotificationIcon />
                   <button
                     onClick={() => shiftMonth(-1)}
                     className="p-2 rounded-xl border border-slate-700 bg-slate-800"

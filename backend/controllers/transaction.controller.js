@@ -1,4 +1,6 @@
 import Expense from "../models/expense.js";
+import { recalculateSpending } from "./budgetLimit.controller.js";
+import { updateChallengeProgress } from "./challenge.controller.js";
 
 const VALID_TYPES = ["income", "expense", "transfer"];
 const VALID_MODES = ["demo", "actual"];
@@ -176,7 +178,27 @@ export const createTransaction = async (req, res) => {
       },
     });
 
-    res.status(201).json(transaction);
+    // Passive Loan Detection
+    let loanSuggestion = null;
+    if (transaction.type === "expense" && transaction.note) {
+      // Look for names after "with", "for", "to" (e.g. "Dinner with Rahul")
+      const match = transaction.note.match(/(?:with|for|to)\s+([A-Z][A-Za-z]+)/);
+      if (match && match[1]) {
+        loanSuggestion = {
+          personName: match[1],
+          suggestedAmount: Math.round(transaction.amount / 2),
+          type: "lent",
+          note: `Split for: ${transaction.note}`,
+        };
+      }
+    }
+
+    res.status(201).json({ transaction, loanSuggestion });
+
+    // Async side-effects: recalculate budget spending and challenge progress
+    const date = new Date(transaction.transactionDate);
+    recalculateSpending(req.user.id, String(date.getMonth() + 1).padStart(2, "0"), date.getFullYear()).catch(console.error);
+    updateChallengeProgress(req.user.id, transaction).catch(console.error);
   } catch (error) {
     res.status(500).json({ message: "Failed to create transaction" });
   }
@@ -217,6 +239,16 @@ export const updateTransaction = async (req, res) => {
     );
 
     res.status(200).json(updated);
+
+    // Async recalculate spending for the relevant month/year
+    const date = new Date(updated.transactionDate);
+    recalculateSpending(req.user.id, String(date.getMonth() + 1).padStart(2, "0"), date.getFullYear()).catch(console.error);
+    
+    // If the date moved to a different month, recalculate the old month too
+    const oldDate = new Date(existing.transactionDate);
+    if (oldDate.getMonth() !== date.getMonth() || oldDate.getFullYear() !== date.getFullYear()) {
+      recalculateSpending(req.user.id, String(oldDate.getMonth() + 1).padStart(2, "0"), oldDate.getFullYear()).catch(console.error);
+    }
   } catch (error) {
     res.status(500).json({ message: "Failed to update transaction" });
   }
@@ -232,6 +264,10 @@ export const deleteTransaction = async (req, res) => {
     }
 
     res.status(200).json({ message: "Transaction deleted" });
+
+    // Async recalculate spending for the relevant month/year
+    const date = new Date(deleted.transactionDate);
+    recalculateSpending(req.user.id, String(date.getMonth() + 1).padStart(2, "0"), date.getFullYear()).catch(console.error);
   } catch (error) {
     res.status(500).json({ message: "Failed to delete transaction" });
   }
@@ -373,14 +409,19 @@ export const seedDemoData = async (req, res) => {
 
     await Expense.insertMany(demoData);
     res.status(200).json({ message: "Demo data seeded", count: demoData.length });
+
+    // Recalculate spending for affected months (best effort)
+    const affectedMonths = new Set();
+    demoData.forEach(tx => {
+      const d = new Date(tx.transactionDate);
+      affectedMonths.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+    });
+    
+    affectedMonths.forEach(ym => {
+      const [year, month] = ym.split("-");
+      recalculateSpending(req.user.id, month, parseInt(year)).catch(console.error);
+    });
   } catch (error) {
     res.status(500).json({ message: "Failed to seed data" });
   }
 };
-
-// Legacy aliases kept for backward compatibility with older frontend paths.
-export const getHistory = listTransactions;
-export const createManualExpense = createTransaction;
-export const updateExpense = updateTransaction;
-export const deleteExpense = deleteTransaction;
-export const clearExpenses = clearTransactions;

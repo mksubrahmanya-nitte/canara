@@ -5,23 +5,45 @@ const router = express.Router();
 import { login, logout, me, refresh, register, updateBudget } from "../controllers/auth.controller.js";
 
 import {
-  createSmartExpense,
   createSmartTransaction,
   getAiSuggestion,
   getCanIAffordInsight,
-
-  // $$$%% AI insights features
   getMonthlyAiReport,
   getEndOfMonthPrediction,
   detectSpendingLeaks,
   detectSubscriptions,
   getGoalDelayImpact,
   getWeeklyAiCheckin,
-
 } from "../controllers/ai.controller.js";
 
 import { getDashboardStats, getAnalysisSummary } from "../controllers/budget.controller.js";
+import {
+  createChallenge,
+  getUserChallenges,
+  getActiveChallenges,
+  updateChallenge,
+  deleteChallenge,
+  getChallengeStats,
+  suggestChallenge,
+} from "../controllers/challenge.controller.js";
+import {
+  createLoan,
+  getUserLoans,
+  getLoanSummary,
+  markLoanAsPaid,
+  deleteLoan,
+} from "../controllers/loan.controller.js";
 import { getAiBudgetBrief } from "../controllers/aiInsights.controller.js";
+import {
+  getBudgetProgress,
+  getCategoryBudgets,
+  updateBulkCategoryBudgets,
+  updateCategoryBudget,
+  createCustomCategory,
+  deleteCategory,
+  updateCategory,
+  restoreDefaults,
+} from "../controllers/budgetLimit.controller.js";
 import {
   contributeToGoal,
   createGoal,
@@ -30,17 +52,12 @@ import {
   updateGoal,
 } from "../controllers/goal.controller.js";
 import {
-  clearExpenses,
   clearTransactions,
-  createManualExpense,
   createTransaction,
-  deleteExpense,
   deleteTransaction,
   getCalendarSummary,
-  getHistory,
   listTransactions,
   seedDemoData,
-  updateExpense,
   updateTransaction,
 } from "../controllers/transaction.controller.js";
 
@@ -54,6 +71,16 @@ router.post("/auth/refresh", refresh);
 router.post("/auth/logout", logout);
 router.get("/auth/me", authMiddleware, me);
 router.patch("/auth/budget", authMiddleware, updateBudget);
+
+// Budget Category Routes
+router.get("/budget/categories", authMiddleware, getCategoryBudgets);
+router.post("/budget/categories", authMiddleware, createCustomCategory);
+router.put("/budget/categories/bulk", authMiddleware, updateBulkCategoryBudgets);
+router.put("/budget/categories/:category", authMiddleware, updateCategoryBudget);
+router.patch("/budget/categories/:category", authMiddleware, updateCategory);
+router.delete("/budget/categories/:category", authMiddleware, deleteCategory);
+router.post("/budget/categories/restore-defaults", authMiddleware, restoreDefaults);
+router.get("/budget/progress", authMiddleware, getBudgetProgress);
 
 // Protected Routes (Require Auth)
 router.post("/transactions", authMiddleware, createTransaction);
@@ -69,13 +96,10 @@ router.put("/transactions/:transactionId", authMiddleware, updateTransaction);
 router.delete("/transactions/:transactionId", authMiddleware, deleteTransaction);
 router.delete("/transactions", authMiddleware, clearTransactions);
 
-//$$$$$$
 // Analysis Routes
 router.get("/analysis/summary", authMiddleware, getAnalysisSummary);
-//$$$$$$
 
-// $$$%% Advanced AI Insights
-
+// Advanced AI Insights
 router.get("/ai/report/monthly", authMiddleware, getMonthlyAiReport);
 
 router.get("/ai/prediction/end-month", authMiddleware, getEndOfMonthPrediction);
@@ -88,24 +112,27 @@ router.post("/ai/goals/delay-impact", authMiddleware, getGoalDelayImpact);
 
 router.get("/ai/checkin/weekly", authMiddleware, getWeeklyAiCheckin);
 
-
-
-//dssdfsf
-
+// Goals Routes
 router.get("/goals", authMiddleware, listGoals);
 router.post("/goals", authMiddleware, createGoal);
 router.patch("/goals/:goalId", authMiddleware, updateGoal);
 router.post("/goals/:goalId/contribute", authMiddleware, contributeToGoal);
 router.delete("/goals/:goalId", authMiddleware, deleteGoal);
 
-// Legacy expense routes kept temporarily for compatibility.
-router.post("/expenses/add", authMiddleware, createSmartExpense);
-router.post("/expenses", authMiddleware, createManualExpense);
-router.get("/expenses/history", authMiddleware, getHistory);
-router.get("/expenses/stats", authMiddleware, getDashboardStats);
-router.post("/expenses/seed", authMiddleware, seedDemoData);
-router.put("/expenses/:expenseId", authMiddleware, updateExpense);
-router.delete("/expenses/:expenseId", authMiddleware, deleteExpense);
-router.delete("/expenses", authMiddleware, clearExpenses);
+// Challenge Routes
+router.post("/challenges", authMiddleware, createChallenge);
+router.get("/challenges", authMiddleware, getUserChallenges);
+router.get("/challenges/active", authMiddleware, getActiveChallenges);
+router.get("/challenges/stats", authMiddleware, getChallengeStats);
+router.get("/challenges/suggest", authMiddleware, suggestChallenge);
+router.put("/challenges/:id", authMiddleware, updateChallenge);
+router.delete("/challenges/:id", authMiddleware, deleteChallenge);
+
+// Loan Routes
+router.post("/loans", authMiddleware, createLoan);
+router.get("/loans", authMiddleware, getUserLoans);
+router.get("/loans/summary", authMiddleware, getLoanSummary);
+router.put("/loans/:id/pay", authMiddleware, markLoanAsPaid);
+router.delete("/loans/:id", authMiddleware, deleteLoan);
 
 export default router;

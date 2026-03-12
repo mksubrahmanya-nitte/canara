@@ -2,9 +2,12 @@ import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YA
 import { BadgeCheck, PiggyBank, Sparkles, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 import { monthTitle } from "../../lib/budget";
 import { useBudgetOutlet } from "./useBudgetOutlet";
+import NotificationBar from "../../components/NotificationBar";
+import { useNotification } from "../../context/notification-context.jsx";
 
 const BudgetOverviewPage = () => {
   const { stats, calendarSummary, transactions, money, currentMonth } = useBudgetOutlet();
+  const { notifications, removeNotification } = useNotification();
 
   const chartData = [...calendarSummary]
     .sort((a, b) => new Date(a.date) - new Date(b.date))
@@ -19,6 +22,8 @@ const BudgetOverviewPage = () => {
 
   return (
     <div className="space-y-4">
+      <NotificationBar notifications={notifications} onRemove={removeNotification} />
+      
       <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         {[
           { label: "Income", value: money(stats.totalIncome), icon: TrendingUp, color: "text-emerald-300" },

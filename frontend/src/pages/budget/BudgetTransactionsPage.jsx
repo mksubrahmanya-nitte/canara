@@ -1,14 +1,20 @@
-import { useMemo, useState } from "react";
-import { Filter, Pencil, Trash2 } from "lucide-react";
+import { useMemo, useState, useEffect } from "react";
+import { Filter, Pencil, Trash2, X } from "lucide-react";
 import SmartInput from "../../components/SmartInput";
 import api from "../../lib/api";
-import { categoriesByType, toInputDate, typeOptions } from "../../lib/budget";
+import { toInputDate, typeOptions } from "../../lib/budget";
 import { useBudgetOutlet } from "./useBudgetOutlet";
+import { getAvailableCategories } from "../../lib/budgetCategories";
 
 const sampleFilterOptions = ["all", "sample", "manual"];
 
+const DEFAULT_CATEGORIES = {
+  expense: ["Food", "Transport", "Rent", "Utilities", "Shopping", "Health", "Entertainment", "Education", "Savings", "Other"],
+  income: ["Salary", "Freelance", "Investments", "Refund", "Gift", "Other"],
+};
+
 const BudgetTransactionsPage = () => {
-  const { transactions, refreshData, money, notify, busyAction, setBusyAction } = useBudgetOutlet();
+  const { transactions, refreshData, money, notify, busyAction, setBusyAction, currentMonth } = useBudgetOutlet();
 
   const [searchText, setSearchText] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -23,6 +29,28 @@ const BudgetTransactionsPage = () => {
     transactionDate: "",
     note: "",
   });
+
+  const [categoryOptions, setCategoryOptions] = useState(DEFAULT_CATEGORIES);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(false);
+
+  useEffect(() => {
+    loadCategories();
+  }, [currentMonth]);
+
+  const loadCategories = async () => {
+    try {
+      setIsLoadingCategories(true);
+      const month = String(currentMonth.getMonth() + 1).padStart(2, '0');
+      const year = currentMonth.getFullYear();
+      
+      const categories = await getAvailableCategories(month, year);
+      setCategoryOptions(categories);
+    } catch (error) {
+      console.error("Failed to load categories:", error);
+    } finally {
+      setIsLoadingCategories(false);
+    }
+  };
 
   const sampleCount = transactions.filter((txn) => txn.isSample).length;
 
@@ -107,8 +135,10 @@ const BudgetTransactionsPage = () => {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 p-3 text-sm text-cyan-100">
-        Sample rows loaded: <b>{sampleCount}</b>. They are labeled in the list below for easy demo storytelling.
+      <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 p-3 text-sm text-cyan-100 flex items-center justify-between">
+        <div>
+           Sample rows loaded: <b>{sampleCount}</b>. They are labeled in the list below for easy demo storytelling.
+        </div>
       </div>
 
       <SmartInput onTransactionAdded={refreshData} />
@@ -167,7 +197,7 @@ const BudgetTransactionsPage = () => {
                         setEditForm((prev) => ({
                           ...prev,
                           type: e.target.value,
-                          category: categoriesByType[e.target.value][0],
+                          category: categoryOptions[e.target.value][0],
                         }))
                       }
                       className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-sm"
@@ -190,8 +220,9 @@ const BudgetTransactionsPage = () => {
                       value={editForm.category}
                       onChange={(e) => setEditForm((prev) => ({ ...prev, category: e.target.value }))}
                       className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-sm"
+                      disabled={isLoadingCategories}
                     >
-                      {(categoriesByType[editForm.type] || ["Other"]).map((category) => (
+                      {(categoryOptions[editForm.type] || ["Other"]).map((category) => (
                         <option key={category} value={category}>
                           {category}
                         </option>

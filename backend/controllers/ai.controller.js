@@ -397,7 +397,7 @@ export const getCanIAffordInsight = async (req, res) => {
       };
     });
 
-    return res.status(200).json({
+        return res.status(200).json({
       itemName,
       amount: roundToTwo(amount),
       currency: user?.currency || "INR",
@@ -422,9 +422,6 @@ export const getCanIAffordInsight = async (req, res) => {
     return res.status(500).json({ message: "Failed to generate affordability insight" });
   }
 };
-
-// Legacy alias kept for compatibility with previous frontend route.
-export const createSmartExpense = createSmartTransaction;
 
 
 //=====used incognito chatgpt for honest opinion on features:

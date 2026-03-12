@@ -5,8 +5,11 @@ import BudgetOverviewPage from "./pages/budget/BudgetOverviewPage";
 import BudgetCalendarPage from "./pages/budget/BudgetCalendarPage";
 import BudgetTransactionsPage from "./pages/budget/BudgetTransactionsPage";
 import BudgetAffordabilityPage from "./pages/budget/BudgetAffordabilityPage";
-import AnalysisPage from "./pages/budget/AnalysisPage"; //$$$$$$
+import AnalysisPage from "./pages/budget/AnalysisPage";
 import SettingsPage from "./pages/budget/SettingsPage";
+import BudgetCategoriesPage from "./pages/budget/BudgetCategoriesPage";
+import ChallengesPage from "./pages/challenges/ChallengesPage";
+import LoansPage from "./pages/loans/LoansPage";
 import { useAuth } from "./context/useAuth";
 
 const FullScreenLoader = () => (
@@ -61,6 +64,9 @@ function App() {
           <Route path="affordability" element={<BudgetAffordabilityPage />} />
           <Route path="calendar" element={<BudgetCalendarPage />} />
           <Route path="transactions" element={<BudgetTransactionsPage />} />
+          <Route path="budget-categories" element={<BudgetCategoriesPage />} />
+          <Route path="challenges" element={<ChallengesPage />} />
+          <Route path="loans" element={<LoansPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard/overview" replace />} />

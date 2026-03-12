@@ -9,6 +9,7 @@ const store = {
   users: [],
   expenses: [],
   goals: [],
+  budgetLimits: [],
   userCounter: 1,
   expenseCounter: 1,
   goalCounter: 1,
@@ -200,6 +201,19 @@ vi.mock("../models/expense.js", () => ({
 
       return created;
     },
+    exists: async (filter) => {
+      const userExpenses = store.expenses.filter((e) => e.userId === filter.userId);
+      return userExpenses.some((e) => e.category === filter.category);
+    },
+    countDocuments: async (filter) => {
+      const userExpenses = store.expenses.filter((e) => e.userId === filter.userId);
+      return userExpenses.filter((e) => e.category === filter.category).length;
+    },
+    aggregate: () => ({
+      then: (resolve) => resolve([]),
+    }),
+    updateMany: async () => ({ nModified: 0 }),
+    deleteMany: async () => ({ nDeleted: 0 }),
   },
 }));
 
@@ -260,6 +274,52 @@ vi.mock("../models/goal.js", () => ({
   },
 }));
 
+const toBudgetLimitDoc = (bl) => ({
+  ...bl,
+  save: async function () {
+    const index = store.budgetLimits.findIndex((item) => item._id === bl._id);
+    if (index >= 0) store.budgetLimits[index] = { ...bl, ...this };
+    return this;
+  },
+});
+
+vi.mock("../models/budgetLimit.js", () => ({
+  default: {
+    findOne: async (filter) => {
+      const bl = store.budgetLimits.find(
+        (item) =>
+          item.userId === filter.userId &&
+          String(item.month) === String(filter.month) &&
+          Number(item.year) === Number(filter.year),
+      );
+      return bl ? toBudgetLimitDoc(bl) : null;
+    },
+    findOneAndUpdate: async (filter, updates) => {
+       const bl = store.budgetLimits.find(
+        (item) =>
+          item.userId === filter.userId &&
+          String(item.month) === String(filter.month) &&
+          Number(item.year) === Number(filter.year),
+      );
+      if (bl) {
+         // simplified mock for findOneAndUpdate with $set
+         return toBudgetLimitDoc(bl);
+      }
+      return null;
+    },
+    create: async (payload) => {
+      const bl = {
+        _id: `bl-${store.budgetLimits.length + 1}`,
+        ...payload,
+      };
+      store.budgetLimits.push(bl);
+      return toBudgetLimitDoc(bl);
+    },
+    updateMany: async () => ({ nModified: 0 }),
+    index: () => {},
+  },
+}));
+
 let app;
 
 const extractCookie = (cookies, cookieName) => {
@@ -283,6 +343,7 @@ beforeEach(() => {
   store.users = [];
   store.expenses = [];
   store.goals = [];
+  store.budgetLimits = [];
   store.userCounter = 1;
   store.expenseCounter = 1;
   store.goalCounter = 1;
@@ -324,6 +385,7 @@ describe("Secure auth flow", () => {
       name: "Bob",
       email: "bob@example.com",
       password: "password123",
+      monthlyBudget: 10000,
     });
 
     const loginResponse = await agent.post("/api/auth/login").send({
@@ -356,6 +418,7 @@ describe("Secure auth flow", () => {
       name: "Cara",
       email: "cara@example.com",
       password: "password123",
+      monthlyBudget: 10000,
     });
 
     await agent.post("/api/auth/login").send({
@@ -377,6 +440,7 @@ describe("Secure auth flow", () => {
       name: "Diana",
       email: "diana@example.com",
       password: "password123",
+      monthlyBudget: 10000,
     });
 
     const loginResponse = await agent.post("/api/auth/login").send({
@@ -397,7 +461,7 @@ describe("Secure auth flow", () => {
 
 describe("Protected expense APIs", () => {
   it("blocks unauthenticated expense access", async () => {
-    const response = await request(app).get("/api/expenses/history");
+    const response = await request(app).get("/api/transactions");
     expect(response.status).toBe(401);
   });
 
@@ -416,7 +480,7 @@ describe("Protected expense APIs", () => {
       password: "password123",
     });
 
-    const addExpenseResponse = await agent.post("/api/expenses/add").send({
+    const addExpenseResponse = await agent.post("/api/transactions/ai-add").send({
       description: "City bus pass",
       amount: 600,
     });
@@ -424,14 +488,14 @@ describe("Protected expense APIs", () => {
     expect(addExpenseResponse.status).toBe(201);
     expect(addExpenseResponse.body.amount).toBe(600);
 
-    const seedResponse = await agent.post("/api/expenses/seed");
+    const seedResponse = await agent.post("/api/transactions/seed");
     expect(seedResponse.status).toBe(200);
 
-    const historyResponse = await agent.get("/api/expenses/history");
+    const historyResponse = await agent.get("/api/transactions");
     expect(historyResponse.status).toBe(200);
     expect(historyResponse.body.length).toBeGreaterThan(1);
 
-    const statsResponse = await agent.get("/api/expenses/stats");
+    const statsResponse = await agent.get("/api/transactions/stats");
     expect(statsResponse.status).toBe(200);
     expect(statsResponse.body.totalSpent).toBeGreaterThan(0);
     expect(statsResponse.body.averageTransactionValue).toBeGreaterThan(0);
